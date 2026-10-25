@@ -1,6 +1,6 @@
 import type { IDataObject, IExecuteFunctions } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
-import { compact, inferOwlApiRequest, toDate, toList } from './transport';
+import { compact, inferOwlApiRawRequest, inferOwlApiRequest, toDate, toList } from './transport';
 
 const enc = encodeURIComponent;
 
@@ -131,6 +131,75 @@ async function resolveApplicationId(this: IExecuteFunctions, itemIndex: number):
 	return String(match.id);
 }
 
+/** The API's list page size cap. */
+const PAGE_SIZE = 100;
+
+/** The pipeline:read list routes (paged with page / limit) and their n8n filter names. */
+const LISTS: Record<string, { path: string; qs: (filters: IDataObject) => IDataObject }> = {
+	submittal: {
+		path: '/submittals',
+		qs: (filters) => ({
+			candidate_id: filters.candidateId,
+			client_id: filters.clientId,
+			job_id: filters.jobId,
+			status: filters.status,
+			submitted_after: filters.submittedAfter,
+			submitted_before: filters.submittedBefore,
+		}),
+	},
+	interviewBooking: {
+		path: '/interviews/bookings',
+		qs: (filters) => ({
+			candidate_id: filters.candidateId,
+			job_id: filters.jobId,
+			status: filters.status,
+			sort: 'created_at',
+			order: 'desc',
+		}),
+	},
+	placement: {
+		path: '/assignments',
+		qs: (filters) => ({
+			candidate_id: filters.candidateId,
+			client_id: filters.clientId,
+			status: filters.status,
+			ending_in: numberOrUndefined(filters.endingIn),
+			sort: 'created_at',
+			order: 'desc',
+		}),
+	},
+};
+
+const has = (table: object, key: string) => Object.prototype.hasOwnProperty.call(table, key);
+
+const GETS: Record<string, { parameter: string; path: (id: string) => string }> = {
+	submittal: { parameter: 'submittalId', path: (id) => `/submittals/${enc(id)}` },
+	interviewBooking: { parameter: 'bookingId', path: (id) => `/interviews/bookings/${enc(id)}` },
+	placement: { parameter: 'placementId', path: (id) => `/assignments/${enc(id)}` },
+};
+
+async function listRecords(
+	this: IExecuteFunctions,
+	resource: string,
+	itemIndex: number,
+): Promise<IDataObject[]> {
+	const list = LISTS[resource];
+	const returnAll = this.getNodeParameter('returnAll', itemIndex, false) as boolean;
+	const limit = returnAll ? PAGE_SIZE : (this.getNodeParameter('limit', itemIndex, 50) as number);
+	const filters = this.getNodeParameter('filters', itemIndex, {}) as IDataObject;
+	const qs = compact(list.qs(filters));
+	const records: IDataObject[] = [];
+	for (let page = 1; ; page++) {
+		const body = ((await inferOwlApiRawRequest.call(this, 'GET', list.path, {
+			qs: { ...qs, page, limit },
+		})) ?? {}) as IDataObject;
+		const rows = Array.isArray(body.data) ? (body.data as IDataObject[]) : [];
+		records.push(...rows);
+		if (!returnAll || rows.length === 0 || page >= Number(body.totalPages ?? 0)) break;
+	}
+	return records;
+}
+
 /** Runs one operation for one input item; returns the record(s) it produced. */
 export async function runOperation(
 	this: IExecuteFunctions,
@@ -200,6 +269,14 @@ export async function runOperation(
 		const body = compact({ applicationId, stageId, reason });
 		return (await inferOwlApiRequest.call(this, 'POST', '/pipeline/move', { body })) as IDataObject;
 	}
+
+	if (has(GETS, resource) && operation === 'get') {
+		const { parameter, path } = GETS[resource];
+		const id = String(this.getNodeParameter(parameter, itemIndex) ?? '').trim();
+		return (await inferOwlApiRequest.call(this, 'GET', path(id))) as IDataObject;
+	}
+	if (has(LISTS, resource) && operation === 'getAll')
+		return listRecords.call(this, resource, itemIndex);
 
 	if (resource === 'call' && operation === 'logOutcome') {
 		const callId = this.getNodeParameter('callId', itemIndex) as string;

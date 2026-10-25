@@ -2,7 +2,7 @@ import type { IExecuteFunctions, ILoadOptionsFunctions, INodeProperties } from '
 import { NodeApiError, NodeOperationError } from 'n8n-workflow';
 import { InferOwl } from '../nodes/InferOwl/InferOwl.node';
 import { candidateBody, jobBody, samePhone } from '../nodes/InferOwl/shared/operations';
-import { envelope, executeContext, router } from './helpers';
+import { envelope, executeContext, router, type RecordedRequest } from './helpers';
 
 const CANDIDATE = {
 	id: '3f6c1d2a-8b4e-4c1f-9a7d-2e5b8c0d1f34',
@@ -20,7 +20,7 @@ const run = (context: ReturnType<typeof executeContext>) =>
 	node.execute.call(context as unknown as IExecuteFunctions);
 
 describe('InferOwl node description', () => {
-	it('is a usable-as-tool node on the inferOwlApi credential with four resources', () => {
+	it('is a usable-as-tool node on the inferOwlApi credential with seven resources', () => {
 		const { description } = node;
 		expect(description.name).toBe('inferOwl');
 		expect(description.usableAsTool).toBe(true);
@@ -32,7 +32,10 @@ describe('InferOwl node description', () => {
 			'application',
 			'call',
 			'candidate',
+			'interviewBooking',
 			'job',
+			'placement',
+			'submittal',
 		]);
 	});
 
@@ -365,6 +368,138 @@ describe('application and call operations', () => {
 			method: 'PATCH',
 			body: { disposition: 'voicemail', note: 'Left a message' },
 		});
+	});
+});
+
+describe('submittal, interview booking and placement reads', () => {
+	const SUBMITTAL = {
+		id: '6c7d8e9f-0a1b-4c2d-9e3f-4a5b6c7d8e9f',
+		submittal_status: 'offer_pending',
+	};
+	const BOOKING = { id: '0a1b2c3d-4e5f-4a6b-ac7d-8e9f0a1b2c3d', status: 'confirmed' };
+	const PLACEMENT = { id: '1b2c3d4e-5f6a-4b7c-bd8e-9f0a1b2c3d4e', status: 'active' };
+	const page = (data: unknown[], extra: Record<string, number>) => ({
+		success: true,
+		data,
+		...extra,
+	});
+
+	it.each([
+		['submittal', 'submittalId', SUBMITTAL, '/submittals'],
+		['interviewBooking', 'bookingId', BOOKING, '/interviews/bookings'],
+		['placement', 'placementId', PLACEMENT, '/assignments'],
+	])('gets a %s by id', async (resource, parameter, record, path) => {
+		const http = router({ [`GET ${path}/${record.id}`]: envelope(record) });
+		const [[item]] = await run(
+			executeContext([{ resource, operation: 'get', [parameter]: ` ${record.id} ` }], http),
+		);
+		expect(item.json).toEqual(record);
+		expect(http.requests[0]).toMatchObject({ method: 'GET', credentialType: 'inferOwlApi' });
+	});
+
+	it('lists submittals up to the limit with the filters in API names', async () => {
+		const http = router({
+			'GET /submittals': page([SUBMITTAL], { total: 1, page: 1, totalPages: 1 }),
+		});
+		const result = await run(
+			executeContext(
+				[
+					{
+						resource: 'submittal',
+						operation: 'getAll',
+						returnAll: false,
+						limit: 5,
+						filters: {
+							candidateId: CANDIDATE.id,
+							jobId: JOB.id,
+							clientId: '',
+							status: 'offer_pending',
+							submittedAfter: '2026-10-01T00:00:00.000Z',
+						},
+					},
+				],
+				http,
+			),
+		);
+		expect(result[0].map((item) => item.json)).toEqual([SUBMITTAL]);
+		expect(http.requests).toHaveLength(1);
+		expect(http.requests[0].qs).toEqual({
+			candidate_id: CANDIDATE.id,
+			job_id: JOB.id,
+			status: 'offer_pending',
+			submitted_after: '2026-10-01T00:00:00.000Z',
+			page: 1,
+			limit: 5,
+		});
+	});
+
+	it('pages through every interview booking with Return All, newest booked first', async () => {
+		const http = router({
+			'GET /interviews/bookings': (request: RecordedRequest) =>
+				(request.qs as { page: number }).page === 1
+					? page([BOOKING], { total: 2, page: 1, totalPages: 2 })
+					: page([{ ...BOOKING, id: 'second' }], { total: 2, page: 2, totalPages: 2 }),
+		});
+		const result = await run(
+			executeContext(
+				[
+					{
+						resource: 'interviewBooking',
+						operation: 'getAll',
+						returnAll: true,
+						filters: { status: 'confirmed' },
+					},
+				],
+				http,
+			),
+		);
+		expect(result[0].map((item) => item.json.id)).toEqual([BOOKING.id, 'second']);
+		expect(http.requests.map((request) => request.qs)).toEqual([
+			{ status: 'confirmed', sort: 'created_at', order: 'desc', page: 1, limit: 100 },
+			{ status: 'confirmed', sort: 'created_at', order: 'desc', page: 2, limit: 100 },
+		]);
+	});
+
+	it('lists placements ending soon, and stops on an empty page', async () => {
+		const http = router({
+			'GET /assignments': page([], { total: 0, page: 1, totalPages: 0 }),
+		});
+		const result = await run(
+			executeContext(
+				[
+					{
+						resource: 'placement',
+						operation: 'getAll',
+						returnAll: true,
+						filters: { endingIn: 30, clientId: JOB.id },
+					},
+				],
+				http,
+			),
+		);
+		expect(result[0]).toEqual([]);
+		expect(http.requests).toHaveLength(1);
+		expect(http.requests[0].qs).toEqual({
+			client_id: JOB.id,
+			ending_in: 30,
+			sort: 'created_at',
+			order: 'desc',
+			page: 1,
+			limit: 100,
+		});
+	});
+
+	it('surfaces a key without pipeline:read as an API error', async () => {
+		const http = router({
+			'GET /submittals': () => {
+				throw Object.assign(new Error('Request failed with status code 403'), {
+					httpCode: '403',
+					description: 'This API key is missing the "pipeline:read" scope',
+				});
+			},
+		});
+		const params = [{ resource: 'submittal', operation: 'getAll', returnAll: false, limit: 3 }];
+		await expect(run(executeContext(params, http))).rejects.toBeInstanceOf(NodeApiError);
 	});
 });
 

@@ -2,7 +2,7 @@
 
 n8n community nodes for [InferOwl](https://inferowl.com), the recruitment platform for healthcare staffing agencies.
 
-- **InferOwl**: create, update, get and search candidates; create, get and search jobs; move a candidate to another pipeline stage; log a call outcome.
+- **InferOwl**: create, update, get and search candidates; create, get and search jobs; move a candidate to another pipeline stage; get and list submittals, interview bookings and placements; log a call outcome.
 - **InferOwl Trigger**: starts a workflow the moment something happens in your InferOwl workspace (candidate created, pipeline stage changed, submittal created, placement started, job created and more).
 
 Both use the public InferOwl REST API (`https://api.inferowl.com/api/v1`, described at `/api/v1/public/openapi.json`) with a scoped API key.
@@ -35,7 +35,7 @@ The credential test lists webhook subscriptions, so the key needs the `webhooks:
 | `candidates:write` | Candidate create / update |
 | `jobs:read` | Job get / search |
 | `jobs:write` | Job create |
-| `pipeline:read` | The stage list on Move to Stage |
+| `pipeline:read` | The stage list on Move to Stage; Submittal, Interview Booking and Placement get / get many |
 | `pipeline:write` | Move to Stage |
 | `calls:write` | Log Outcome |
 
@@ -53,6 +53,12 @@ A key acts with its creator's current role in InferOwl. Subscribing to events ne
 | Job | Get | `GET /jobs/{id}` |
 | Job | Search | `GET /jobs?search=&status=` |
 | Application | Move to Stage | `POST /pipeline/move`, by application ID or by candidate + job (`GET /candidates/{id}/applications`) |
+| Submittal | Get | `GET /submittals/{id}` (with its client interviews, offers, client responses and placements) |
+| Submittal | Get Many | `GET /submittals` (most recently submitted first; filter by candidate, job, client, status, submitted date) |
+| Interview Booking | Get | `GET /interviews/bookings/{id}` |
+| Interview Booking | Get Many | `GET /interviews/bookings` (most recently booked first; filter by candidate, job, status) |
+| Placement | Get | `GET /assignments/{id}` |
+| Placement | Get Many | `GET /assignments` (most recently created first; filter by candidate, client, status, ending within N days) |
 | Call | Log Outcome | `PATCH /communication/calls/{id}/disposition` (records a disposition and note; never places a call) |
 
 SSN, date of birth and do-not-hire fields are deliberately not exposed.
@@ -63,7 +69,7 @@ Pick one or more events: Candidate Created, Candidate Added to Job, Pipeline Sta
 
 When the workflow is activated (or you listen for a test event) the node creates a webhook subscription in InferOwl for this node's URL and stores its signing secret; deactivating removes it. Each delivery carries `X-InferOwl-Timestamp` (Unix seconds, set afresh on every attempt) and `X-InferOwl-Signature`, the lowercase hex HMAC-SHA256 of `${timestamp}.${rawBody}` with that secret. A delivery whose signature does not match, whose timestamp is missing or altered, or whose timestamp is more than 5 minutes from the n8n server's clock (a replay) gets `401` and does not run the workflow, so keep the server clock in sync (NTP). The InferOwl settings page "Send test" ping is acknowledged without running the workflow.
 
-The output is the event, flattened: `id`, `event`, `occurred_at`, plus the event's ids (for example `candidate_id`, `job_id`, `application_id`, `from_stage`, `to_stage`). Add an InferOwl node (Candidate → Get, Job → Get) to load the full records.
+The output is the event, flattened: `id`, `event`, `occurred_at`, plus the event's ids (for example `candidate_id`, `job_id`, `application_id`, `from_stage`, `to_stage`). Add an InferOwl node (Candidate → Get, Job → Get, Submittal → Get, Interview Booking → Get, Placement → Get with the event's `assignment_id`) to load the full records.
 
 Requirements:
 

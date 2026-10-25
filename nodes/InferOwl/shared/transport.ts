@@ -62,7 +62,18 @@ export function unwrap<T = unknown>(body: unknown): T {
 	return body as T;
 }
 
+/** The record (or records) of an API call, without the { success, data } envelope. */
 export async function inferOwlApiRequest(
+	this: InferOwlContext,
+	method: IHttpRequestMethods,
+	path: string,
+	options: { body?: IDataObject; qs?: IDataObject } = {},
+): Promise<unknown> {
+	return unwrap(await inferOwlApiRawRequest.call(this, method, path, options));
+}
+
+/** The whole response body, for lists whose envelope carries total / page / totalPages. */
+export async function inferOwlApiRawRequest(
 	this: InferOwlContext,
 	method: IHttpRequestMethods,
 	path: string,
@@ -83,10 +94,5 @@ export async function inferOwlApiRequest(
 	};
 	if (options.qs && Object.keys(options.qs).length) request.qs = options.qs;
 	if (options.body) request.body = options.body;
-	const response = await this.helpers.httpRequestWithAuthentication.call(
-		this,
-		'inferOwlApi',
-		request,
-	);
-	return unwrap(response);
+	return await this.helpers.httpRequestWithAuthentication.call(this, 'inferOwlApi', request);
 }
