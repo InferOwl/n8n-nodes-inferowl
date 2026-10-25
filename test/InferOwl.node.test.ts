@@ -20,7 +20,7 @@ const run = (context: ReturnType<typeof executeContext>) =>
 	node.execute.call(context as unknown as IExecuteFunctions);
 
 describe('InferOwl node description', () => {
-	it('is a usable-as-tool node on the inferOwlApi credential with seven resources', () => {
+	it('is a usable-as-tool node on the inferOwlApi credential with eight resources', () => {
 		const { description } = node;
 		expect(description.name).toBe('inferOwl');
 		expect(description.usableAsTool).toBe(true);
@@ -32,6 +32,7 @@ describe('InferOwl node description', () => {
 			'application',
 			'call',
 			'candidate',
+			'clientInterview',
 			'interviewBooking',
 			'job',
 			'placement',
@@ -377,6 +378,11 @@ describe('submittal, interview booking and placement reads', () => {
 		submittal_status: 'offer_pending',
 	};
 	const BOOKING = { id: '0a1b2c3d-4e5f-4a6b-ac7d-8e9f0a1b2c3d', status: 'confirmed' };
+	const CLIENT_INTERVIEW = {
+		id: '3d4e5f6a-7b8c-4d9e-9f0a-1b2c3d4e5f6a',
+		submittal_id: SUBMITTAL.id,
+		status: 'scheduled',
+	};
 	const PLACEMENT = { id: '1b2c3d4e-5f6a-4b7c-bd8e-9f0a1b2c3d4e', status: 'active' };
 	const page = (data: unknown[], extra: Record<string, number>) => ({
 		success: true,
@@ -386,6 +392,7 @@ describe('submittal, interview booking and placement reads', () => {
 
 	it.each([
 		['submittal', 'submittalId', SUBMITTAL, '/submittals'],
+		['clientInterview', 'interviewId', CLIENT_INTERVIEW, '/submittals/interviews'],
 		['interviewBooking', 'bookingId', BOOKING, '/interviews/bookings'],
 		['placement', 'placementId', PLACEMENT, '/assignments'],
 	])('gets a %s by id', async (resource, parameter, record, path) => {
@@ -458,6 +465,64 @@ describe('submittal, interview booking and placement reads', () => {
 			{ status: 'confirmed', sort: 'created_at', order: 'desc', page: 1, limit: 100 },
 			{ status: 'confirmed', sort: 'created_at', order: 'desc', page: 2, limit: 100 },
 		]);
+	});
+
+	it.each([
+		['candidate', 'candidateId', 'Candidate ID'],
+		['job', 'jobId', 'Job ID'],
+		['submittal', 'submittalId', 'Submittal ID'],
+		['clientInterview', 'interviewId', 'Interview ID'],
+		['interviewBooking', 'bookingId', 'Booking ID'],
+		['placement', 'placementId', 'Placement ID'],
+	])('refuses to get a %s with an empty id, without calling the API', async (resource, parameter, label) => {
+		const http = router({});
+		const error = await run(
+			executeContext([{ resource, operation: 'get', [parameter]: '   ' }], http),
+		).catch((caught: unknown) => caught);
+		expect(error).toBeInstanceOf(NodeOperationError);
+		expect((error as NodeOperationError).message).toBe(`${label} is empty`);
+		expect(http.requests).toEqual([]);
+	});
+
+	it('lists client interviews with the filters in API names, newest first', async () => {
+		const http = router({
+			'GET /submittals/interviews': page([CLIENT_INTERVIEW], { total: 1, page: 1, totalPages: 1 }),
+		});
+		const result = await run(
+			executeContext(
+				[
+					{
+						resource: 'clientInterview',
+						operation: 'getAll',
+						returnAll: true,
+						filters: {
+							candidateId: CANDIDATE.id,
+							jobId: '',
+							submittalId: SUBMITTAL.id,
+							status: 'rescheduled',
+							outcome: 'pending',
+							scheduledAfter: '2026-10-01T00:00:00.000Z',
+							scheduledBefore: '2026-11-01T00:00:00.000Z',
+						},
+					},
+				],
+				http,
+			),
+		);
+		expect(result[0].map((item) => item.json)).toEqual([CLIENT_INTERVIEW]);
+		expect(http.requests).toHaveLength(1);
+		expect(http.requests[0].qs).toEqual({
+			candidate_id: CANDIDATE.id,
+			submittal_id: SUBMITTAL.id,
+			status: 'rescheduled',
+			outcome: 'pending',
+			scheduled_after: '2026-10-01T00:00:00.000Z',
+			scheduled_before: '2026-11-01T00:00:00.000Z',
+			sort: 'created_at',
+			order: 'desc',
+			page: 1,
+			limit: 100,
+		});
 	});
 
 	it('lists placements ending soon, and stops on an empty page', async () => {

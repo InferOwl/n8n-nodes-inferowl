@@ -147,6 +147,20 @@ const LISTS: Record<string, { path: string; qs: (filters: IDataObject) => IDataO
 			submitted_before: filters.submittedBefore,
 		}),
 	},
+	clientInterview: {
+		path: '/submittals/interviews',
+		qs: (filters) => ({
+			candidate_id: filters.candidateId,
+			job_id: filters.jobId,
+			submittal_id: filters.submittalId,
+			status: filters.status,
+			outcome: filters.outcome,
+			scheduled_after: filters.scheduledAfter,
+			scheduled_before: filters.scheduledBefore,
+			sort: 'created_at',
+			order: 'desc',
+		}),
+	},
 	interviewBooking: {
 		path: '/interviews/bookings',
 		qs: (filters) => ({
@@ -174,9 +188,37 @@ const has = (table: object, key: string) => Object.prototype.hasOwnProperty.call
 
 const GETS: Record<string, { parameter: string; path: (id: string) => string }> = {
 	submittal: { parameter: 'submittalId', path: (id) => `/submittals/${enc(id)}` },
+	clientInterview: {
+		parameter: 'interviewId',
+		path: (id) => `/submittals/interviews/${enc(id)}`,
+	},
 	interviewBooking: { parameter: 'bookingId', path: (id) => `/interviews/bookings/${enc(id)}` },
 	placement: { parameter: 'placementId', path: (id) => `/assignments/${enc(id)}` },
 };
+
+const ID_LABELS: Record<string, string> = {
+	candidateId: 'Candidate ID',
+	jobId: 'Job ID',
+	submittalId: 'Submittal ID',
+	interviewId: 'Interview ID',
+	bookingId: 'Booking ID',
+	placementId: 'Placement ID',
+};
+
+/**
+ * The trimmed record id; an empty one would turn GET /resource/:id into the
+ * list route (or a 404 on the wrong path), so it is refused here.
+ */
+function requiredId(this: IExecuteFunctions, parameter: string, itemIndex: number): string {
+	const id = String(this.getNodeParameter(parameter, itemIndex) ?? '').trim();
+	if (!id) {
+		throw new NodeOperationError(this.getNode(), `${ID_LABELS[parameter] ?? parameter} is empty`, {
+			itemIndex,
+			description: 'Enter the record ID, or map it from the event or a previous node.',
+		});
+	}
+	return id;
+}
 
 async function listRecords(
 	this: IExecuteFunctions,
@@ -228,7 +270,7 @@ export async function runOperation(
 			})) as IDataObject;
 		}
 		if (operation === 'get') {
-			const candidateId = this.getNodeParameter('candidateId', itemIndex) as string;
+			const candidateId = requiredId.call(this, 'candidateId', itemIndex);
 			return withoutSuggestions(
 				(await inferOwlApiRequest.call(
 					this,
@@ -249,7 +291,7 @@ export async function runOperation(
 			})) as IDataObject;
 		}
 		if (operation === 'get') {
-			const jobId = this.getNodeParameter('jobId', itemIndex) as string;
+			const jobId = requiredId.call(this, 'jobId', itemIndex);
 			return withoutSuggestions(
 				(await inferOwlApiRequest.call(this, 'GET', `/jobs/${enc(jobId)}`)) as IDataObject,
 			);
@@ -272,7 +314,7 @@ export async function runOperation(
 
 	if (has(GETS, resource) && operation === 'get') {
 		const { parameter, path } = GETS[resource];
-		const id = String(this.getNodeParameter(parameter, itemIndex) ?? '').trim();
+		const id = requiredId.call(this, parameter, itemIndex);
 		return (await inferOwlApiRequest.call(this, 'GET', path(id))) as IDataObject;
 	}
 	if (has(LISTS, resource) && operation === 'getAll')

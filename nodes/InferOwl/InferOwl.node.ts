@@ -11,6 +11,10 @@ import type {
 import { NodeApiError, NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import { candidateFields, candidateOperations } from './descriptions/CandidateDescription';
 import {
+	clientInterviewFields,
+	clientInterviewOperations,
+} from './descriptions/ClientInterviewDescription';
+import {
 	interviewBookingFields,
 	interviewBookingOperations,
 } from './descriptions/InterviewBookingDescription';
@@ -63,6 +67,11 @@ export class InferOwl implements INodeType {
 					{ name: 'Call', value: 'call' },
 					{ name: 'Candidate', value: 'candidate' },
 					{
+						name: 'Client Interview',
+						value: 'clientInterview',
+						description: 'A client interview scheduled on a submittal',
+					},
+					{
 						name: 'Interview Booking',
 						value: 'interviewBooking',
 						description: 'An interview booked with a candidate',
@@ -91,6 +100,8 @@ export class InferOwl implements INodeType {
 			...callFields,
 			...submittalOperations,
 			...submittalFields,
+			...clientInterviewOperations,
+			...clientInterviewFields,
 			...interviewBookingOperations,
 			...interviewBookingFields,
 			...placementOperations,
