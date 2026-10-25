@@ -1,0 +1,220 @@
+import type { INodeProperties } from 'n8n-workflow';
+
+const showFor = (operation: string[]) => ({ show: { resource: ['job'], operation } });
+
+export const jobStatusOptions = [
+	{ name: 'Cancelled', value: 'cancelled' },
+	{ name: 'Closed', value: 'closed' },
+	{ name: 'Draft', value: 'draft' },
+	{ name: 'Filled', value: 'filled' },
+	{ name: 'On Hold', value: 'on_hold' },
+	{ name: 'Open', value: 'open' },
+	{ name: 'Recruiting', value: 'recruiting' },
+];
+
+export const jobOperations: INodeProperties[] = [
+	{
+		displayName: 'Operation',
+		name: 'operation',
+		type: 'options',
+		noDataExpression: true,
+		displayOptions: { show: { resource: ['job'] } },
+		options: [
+			{
+				name: 'Create',
+				value: 'create',
+				description: 'Create a job order',
+				action: 'Create a job',
+			},
+			{ name: 'Get', value: 'get', description: 'Get a job', action: 'Get a job' },
+			{
+				name: 'Search',
+				value: 'search',
+				description: 'Find jobs by title, job number or specialty',
+				action: 'Search jobs',
+			},
+		],
+		default: 'create',
+	},
+];
+
+// Mirrors CreateJobDto in the InferOwl API.
+export const jobFields: INodeProperties[] = [
+	{
+		displayName: 'Title',
+		name: 'title',
+		type: 'string',
+		required: true,
+		default: '',
+		displayOptions: showFor(['create']),
+	},
+	{
+		displayName: 'Additional Fields',
+		name: 'additionalFields',
+		type: 'collection',
+		placeholder: 'Add Field',
+		default: {},
+		displayOptions: showFor(['create']),
+		options: [
+			{
+				displayName: 'Bill Rate',
+				name: 'billRate',
+				type: 'number',
+				typeOptions: { minValue: 0 },
+				default: 0,
+			},
+			{
+				displayName: 'Client ID',
+				name: 'clientId',
+				type: 'string',
+				default: '',
+				description: 'InferOwl client ID (a UUID from the client page)',
+			},
+			{
+				displayName: 'Contract Type',
+				name: 'contractType',
+				type: 'options',
+				options: [
+					{ name: 'Local', value: 'local' },
+					{ name: 'Per Diem', value: 'per_diem' },
+					{ name: 'Permanent', value: 'perm' },
+					{ name: 'Permanent (Local)', value: 'permanent_local' },
+					{ name: 'Travel', value: 'travel' },
+				],
+				default: 'travel',
+			},
+			{ displayName: 'Department', name: 'department', type: 'string', default: '' },
+			{
+				displayName: 'Description',
+				name: 'description',
+				type: 'string',
+				typeOptions: { rows: 4 },
+				default: '',
+			},
+			{
+				displayName: 'Employment Type',
+				name: 'employmentType',
+				type: 'options',
+				options: [
+					{ name: 'Contract', value: 'contract' },
+					{ name: 'Full Time', value: 'full_time' },
+					{ name: 'Part Time', value: 'part_time' },
+					{ name: 'Per Diem', value: 'per_diem' },
+					{ name: 'Permanent', value: 'permanent' },
+				],
+				default: 'contract',
+			},
+			{ displayName: 'Facility Name', name: 'facilityName', type: 'string', default: '' },
+			{
+				displayName: 'Is Exclusive',
+				name: 'isExclusive',
+				type: 'boolean',
+				default: false,
+				description: 'Whether the job is exclusive to your agency',
+			},
+			{ displayName: 'Job Number', name: 'jobNumber', type: 'string', default: '' },
+			{
+				displayName: 'Length (Weeks)',
+				name: 'lengthWeeks',
+				type: 'number',
+				typeOptions: { minValue: 1 },
+				default: 13,
+			},
+			{
+				displayName: 'Location',
+				name: 'location',
+				type: 'string',
+				default: '',
+				placeholder: 'Austin, TX',
+			},
+			{
+				displayName: 'Openings',
+				name: 'openings',
+				type: 'number',
+				typeOptions: { minValue: 1 },
+				default: 1,
+			},
+			{
+				displayName: 'Pay Rate',
+				name: 'payRate',
+				type: 'number',
+				typeOptions: { minValue: 0 },
+				default: 0,
+			},
+			{ displayName: 'Profession', name: 'profession', type: 'string', default: '' },
+			{
+				displayName: 'Required Certifications',
+				name: 'requiredCertifications',
+				type: 'string',
+				default: '',
+				description: 'Comma-separated, for example BLS, ACLS',
+			},
+			{
+				displayName: 'Shift Type',
+				name: 'shiftType',
+				type: 'options',
+				options: [
+					{ name: 'Day', value: 'day' },
+					{ name: 'Mid', value: 'mid' },
+					{ name: 'Night', value: 'night' },
+					{ name: 'PMs', value: 'PMs' },
+					{ name: 'Rotating', value: 'rotating' },
+				],
+				default: 'day',
+			},
+			{ displayName: 'Specialty', name: 'specialty', type: 'string', default: '' },
+			{ displayName: 'Start Date', name: 'assignmentStartDate', type: 'dateTime', default: '' },
+			{
+				displayName: 'Status',
+				name: 'initialStatus',
+				type: 'options',
+				options: [
+					{ name: 'Draft', value: 'draft' },
+					{ name: 'Open', value: 'open' },
+				],
+				default: 'draft',
+			},
+			{
+				displayName: 'Weekly Hours',
+				name: 'weeklyHours',
+				type: 'number',
+				typeOptions: { minValue: 0 },
+				default: 36,
+			},
+		],
+	},
+	{
+		displayName: 'Job ID',
+		name: 'jobId',
+		type: 'string',
+		required: true,
+		default: '',
+		displayOptions: showFor(['get']),
+	},
+	{
+		displayName: 'Search Term',
+		name: 'search',
+		type: 'string',
+		required: true,
+		default: '',
+		description: 'Matches the title, job number, external ID, profession or specialty',
+		displayOptions: showFor(['search']),
+	},
+	{
+		displayName: 'Filters',
+		name: 'filters',
+		type: 'collection',
+		placeholder: 'Add Filter',
+		default: {},
+		displayOptions: showFor(['search']),
+		options: [
+			{
+				displayName: 'Status',
+				name: 'status',
+				type: 'options',
+				options: jobStatusOptions,
+				default: 'open',
+			},
+		],
+	},
+];

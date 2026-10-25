@@ -1,0 +1,53 @@
+# Publishes n8n-nodes-inferowl to npm with a provenance statement when a
+# version tag (for example 0.1.0) is pushed.
+#
+# This file only runs once this folder is its own PUBLIC repository
+# (InferOwl/n8n-nodes-inferowl). In the private monorepo it is inert: GitHub
+# reads workflows from the repository root only, and npm provenance (required
+# by n8n for verified community nodes since May 1 2026) needs a public source
+# repository. See README.md → "Publish".
+#
+# One-time setup on npmjs.com → package n8n-nodes-inferowl → Settings →
+# Trusted Publishers → GitHub Actions: owner InferOwl, repository
+# n8n-nodes-inferowl, workflow publish.yml. No NPM_TOKEN secret is needed then.
+# (Fallback: a granular automation token stored as the NPM_TOKEN secret.)
+
+name: Publish
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Release
+        # n8n-node release detects GitHub Actions: lint, build, then npm publish with provenance.
+        run: |
+          [ -n "$NPM_TOKEN" ] && npm config set //registry.npmjs.org/:_authToken "$NPM_TOKEN"
+          npm run release
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

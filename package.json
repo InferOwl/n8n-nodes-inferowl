@@ -1,0 +1,61 @@
+{
+  "name": "n8n-nodes-inferowl",
+  "version": "0.1.0",
+  "description": "n8n nodes for InferOwl, the healthcare recruitment ATS: candidates, jobs, pipeline stages and call outcomes, plus an instant trigger for workspace events.",
+  "license": "MIT",
+  "homepage": "https://inferowl.com",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "inferowl",
+    "ats",
+    "recruiting",
+    "healthcare-staffing"
+  ],
+  "author": {
+    "name": "InferOwl",
+    "email": "support@inferowl.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/InferOwl/n8n-nodes-inferowl.git"
+  },
+  "scripts": {
+    "build": "n8n-node build",
+    "build:watch": "tsc --watch",
+    "dev": "n8n-node dev",
+    "lint": "n8n-node lint",
+    "lint:fix": "n8n-node lint --fix",
+    "test": "jest",
+    "release": "n8n-node release",
+    "prepublishOnly": "n8n-node prerelease"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": true,
+    "credentials": [
+      "dist/credentials/InferOwlApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/InferOwl/InferOwl.node.js",
+      "dist/nodes/InferOwlTrigger/InferOwlTrigger.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@n8n/node-cli": "0.53.4",
+    "@types/jest": "30.0.0",
+    "eslint": "9.32.0",
+    "jest": "30.5.2",
+    "n8n-workflow": "2.16.0",
+    "prettier": "3.6.2",
+    "release-it": "^21.1.0",
+    "ts-jest": "29.4.15",
+    "typescript": "5.9.2"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}
