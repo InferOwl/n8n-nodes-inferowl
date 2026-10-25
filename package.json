@@ -1,5 +1,5 @@
 {
-  "name": "n8n-nodes-inferowl",
+  "name": "@inferowl/n8n-nodes-inferowl",
   "version": "0.1.0",
   "description": "n8n nodes for InferOwl, the healthcare recruitment ATS: candidates, jobs, pipeline stages, submittals, interview bookings, placements and call outcomes, plus an instant trigger for workspace events.",
   "license": "MIT",

@@ -1,4 +1,4 @@
-# n8n-nodes-inferowl
+# @inferowl/n8n-nodes-inferowl
 
 n8n community nodes for [InferOwl](https://inferowl.com), the recruitment platform for healthcare staffing agencies.
 
@@ -9,10 +9,10 @@ Both use the public InferOwl REST API (`https://api.inferowl.com/api/v1`, descri
 
 ## Installation
 
-Self-hosted n8n: **Settings → Community Nodes → Install**, enter `n8n-nodes-inferowl`, and confirm. Or, in your n8n user folder:
+Self-hosted n8n: **Settings → Community Nodes → Install**, enter `@inferowl/n8n-nodes-inferowl`, and confirm. Or, in your n8n user folder:
 
 ```bash
-npm install n8n-nodes-inferowl
+npm install @inferowl/n8n-nodes-inferowl
 ```
 
 and restart n8n. See the [community nodes installation guide](https://docs.n8n.io/integrations/community-nodes/installation/). On n8n Cloud the node is available once n8n has verified it.
@@ -113,7 +113,7 @@ Since May 1 2026 n8n only verifies community nodes published from GitHub Actions
    RELEASE_MODE=true npm publish --access public   # prepublishOnly blocks a plain npm publish
    ```
 
-   Then on npmjs.com → `n8n-nodes-inferowl` → Settings → **Trusted Publishers** → GitHub Actions: owner `InferOwl`, repository `n8n-nodes-inferowl`, workflow `publish.yml`.
+   Then on npmjs.com → `@inferowl/n8n-nodes-inferowl` → Settings → **Trusted Publishers** → GitHub Actions: owner `InferOwl`, repository `n8n-nodes-inferowl`, workflow `publish.yml`.
 
 4. **Release with provenance** (every version from now on, including a 0.1.1 re-release so a provenance version exists):
 

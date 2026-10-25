@@ -1,5 +1,5 @@
 {
-	"node": "n8n-nodes-inferowl.inferOwl",
+	"node": "@inferowl/n8n-nodes-inferowl.inferOwl",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
 	"categories": ["Sales", "Productivity"],

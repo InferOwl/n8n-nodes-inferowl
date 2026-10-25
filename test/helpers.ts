@@ -52,7 +52,7 @@ export function executeContext(
 		getNode: () => ({
 			id: 'node-1',
 			name: 'InferOwl',
-			type: 'n8n-nodes-inferowl.inferOwl',
+			type: '@inferowl/n8n-nodes-inferowl.inferOwl',
 			typeVersion: 1,
 			position: [0, 0],
 			parameters: {},

@@ -26,7 +26,7 @@ function hookContext(
 		getNode: () => ({
 			id: 'trigger-1',
 			name: 'InferOwl Trigger',
-			type: 'n8n-nodes-inferowl.inferOwlTrigger',
+			type: '@inferowl/n8n-nodes-inferowl.inferOwlTrigger',
 			typeVersion: 1,
 			position: [0, 0],
 			parameters: {},

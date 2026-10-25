@@ -1,4 +1,4 @@
-# Publishes n8n-nodes-inferowl to npm with a provenance statement when a
+# Publishes @inferowl/n8n-nodes-inferowl to npm with a provenance statement when a
 # version tag (for example 0.1.0) is pushed.
 #
 # This file only runs once this folder is its own PUBLIC repository
@@ -7,7 +7,7 @@
 # by n8n for verified community nodes since May 1 2026) needs a public source
 # repository. See README.md → "Publish".
 #
-# One-time setup on npmjs.com → package n8n-nodes-inferowl → Settings →
+# One-time setup on npmjs.com → package @inferowl/n8n-nodes-inferowl → Settings →
 # Trusted Publishers → GitHub Actions: owner InferOwl, repository
 # n8n-nodes-inferowl, workflow publish.yml. No NPM_TOKEN secret is needed then.
 # (Fallback: a granular automation token stored as the NPM_TOKEN secret.)
