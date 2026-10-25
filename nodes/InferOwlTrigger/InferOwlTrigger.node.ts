@@ -8,7 +8,7 @@ import type {
 	JsonObject,
 } from 'n8n-workflow';
 import { NodeApiError, NodeConnectionTypes } from 'n8n-workflow';
-import { SIGNATURE_HEADER, isValidSignature } from '../InferOwl/shared/signature';
+import { SIGNATURE_HEADER, TIMESTAMP_HEADER, isValidSignature } from '../InferOwl/shared/signature';
 import { inferOwlApiRequest } from '../InferOwl/shared/transport';
 
 // The InferOwl webhook event catalog (WEBHOOK_EVENT_CATALOG in @inferowl/shared-config).
@@ -190,9 +190,14 @@ export class InferOwlTrigger implements INodeType {
 		// InferOwl signs JSON.stringify(payload); re-serialising the parsed body is the fallback.
 		const signedBody = rawBody ?? JSON.stringify(this.getBodyData());
 
-		if (!secret || !isValidSignature(secret, signedBody, this.getHeaderData()[SIGNATURE_HEADER])) {
+		const headers = this.getHeaderData();
+		// A missing, altered or stale (over 5 minutes) timestamp fails too: that is the replay guard.
+		if (
+			!secret ||
+			!isValidSignature(secret, signedBody, headers[SIGNATURE_HEADER], headers[TIMESTAMP_HEADER])
+		) {
 			const response = this.getResponseObject();
-			response.status(401).json({ message: 'Invalid InferOwl signature' });
+			response.status(401).json({ message: 'Invalid or expired InferOwl signature' });
 			return { noWebhookResponse: true };
 		}
 

@@ -1,27 +1,64 @@
 import { InferOwlApi } from '../credentials/InferOwlApi.credentials';
-import { isValidSignature, signBody } from '../nodes/InferOwl/shared/signature';
+import { createHmac } from 'crypto';
+import { isValidSignature, signBody, TOLERANCE_SEC } from '../nodes/InferOwl/shared/signature';
 import { apiBase, compact, toDate, toList, unwrap } from '../nodes/InferOwl/shared/transport';
 import packageJson from '../package.json';
 
 describe('signature', () => {
-	it('signs like the InferOwl delivery worker (hex HMAC-SHA256 of the raw body)', () => {
-		// printf '%s' '{"a":1}' | openssl dgst -sha256 -hmac whsec_test
-		expect(signBody('whsec_test', '{"a":1}')).toBe(
-			'51426af50a41dd7ff2cd3f116594734766d4018d15d6fb07169aee5d2959adf5',
+	const NOW_MS = 1_700_000_000_000;
+	const NOW = NOW_MS / 1000;
+
+	it('signs like the InferOwl delivery worker (hex HMAC-SHA256 of `${timestamp}.${rawBody}`)', () => {
+		// printf '%s' '1700000000.{"a":1}' | openssl dgst -sha256 -hmac whsec_test
+		expect(signBody('whsec_test', 1700000000, '{"a":1}')).toBe(
+			'38877139021993b830af32feea6e18a8da83eb2f6e49ee50bd9e4cf4ca4d3789',
 		);
-		expect(signBody('whsec_test', Buffer.from('{"a":1}'))).toBe(signBody('whsec_test', '{"a":1}'));
+		expect(signBody('whsec_test', 1700000000, Buffer.from('{"a":1}'))).toBe(
+			signBody('whsec_test', 1700000000, '{"a":1}'),
+		);
 	});
 
 	it('accepts only the matching signature', () => {
-		const good = signBody('s', 'body');
-		expect(isValidSignature('s', 'body', good)).toBe(true);
-		expect(isValidSignature('s', 'body', good.toUpperCase())).toBe(true);
-		expect(isValidSignature('s', 'body', [good])).toBe(true);
-		expect(isValidSignature('s', 'body2', good)).toBe(false);
-		expect(isValidSignature('t', 'body', good)).toBe(false);
-		expect(isValidSignature('s', 'body', '')).toBe(false);
-		expect(isValidSignature('s', 'body', undefined)).toBe(false);
-		expect(isValidSignature('s', 'body', good.slice(1))).toBe(false);
+		const good = signBody('s', NOW, 'body');
+		const ts = String(NOW);
+		expect(isValidSignature('s', 'body', good, ts, NOW_MS)).toBe(true);
+		expect(isValidSignature('s', 'body', good.toUpperCase(), ts, NOW_MS)).toBe(true);
+		expect(isValidSignature('s', 'body', [good], [ts], NOW_MS)).toBe(true);
+		expect(isValidSignature('s', 'body2', good, ts, NOW_MS)).toBe(false);
+		expect(isValidSignature('t', 'body', good, ts, NOW_MS)).toBe(false);
+		expect(isValidSignature('s', 'body', '', ts, NOW_MS)).toBe(false);
+		expect(isValidSignature('s', 'body', undefined, ts, NOW_MS)).toBe(false);
+		expect(isValidSignature('s', 'body', good.slice(1), ts, NOW_MS)).toBe(false);
+	});
+
+	it('accepts a valid signature within the 5-minute tolerance, either side of now', () => {
+		expect(TOLERANCE_SEC).toBe(300);
+		for (const ts of [NOW - 300, NOW - 1, NOW + 60]) {
+			expect(isValidSignature('s', 'body', signBody('s', ts, 'body'), String(ts), NOW_MS)).toBe(
+				true,
+			);
+		}
+	});
+
+	it('rejects a stale timestamp even when the signature over it is valid', () => {
+		for (const ts of [NOW - 301, NOW + 301]) {
+			expect(isValidSignature('s', 'body', signBody('s', ts, 'body'), String(ts), NOW_MS)).toBe(
+				false,
+			);
+		}
+	});
+
+	it('rejects a tampered, missing or malformed timestamp', () => {
+		const good = signBody('s', NOW - 20, 'body');
+		expect(isValidSignature('s', 'body', good, String(NOW - 10), NOW_MS)).toBe(false);
+		expect(isValidSignature('s', 'body', good, undefined, NOW_MS)).toBe(false);
+		expect(isValidSignature('s', 'body', good, '', NOW_MS)).toBe(false);
+		expect(isValidSignature('s', 'body', good, `${NOW - 20}.5`, NOW_MS)).toBe(false);
+	});
+
+	it('rejects the old body-only signature', () => {
+		const bodyOnly = createHmac('sha256', 's').update('body').digest('hex');
+		expect(isValidSignature('s', 'body', bodyOnly, String(NOW), NOW_MS)).toBe(false);
 	});
 });
 

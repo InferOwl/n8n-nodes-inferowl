@@ -176,6 +176,8 @@ describe('webhook lifecycle', () => {
 	});
 });
 
+const nowSec = () => Math.floor(Date.now() / 1000);
+
 describe('webhook delivery', () => {
 	const payload = {
 		id: 'evt_42',
@@ -190,6 +192,7 @@ describe('webhook delivery', () => {
 		body?: IDataObject;
 		rawBody?: Buffer;
 		signature?: string;
+		timestamp?: number | null;
 		secret?: string;
 		events?: string[];
 		readRawBody?: () => Promise<void>;
@@ -212,8 +215,12 @@ describe('webhook delivery', () => {
 			getRequestObject: () => request,
 			getResponseObject: () => response,
 			getBodyData: () => options.body ?? payload,
-			getHeaderData: () =>
-				options.signature === undefined ? {} : { 'x-inferowl-signature': options.signature },
+			getHeaderData: () => ({
+				...(options.signature === undefined ? {} : { 'x-inferowl-signature': options.signature }),
+				...(options.timestamp === null
+					? {}
+					: { 'x-inferowl-timestamp': String(options.timestamp ?? nowSec()) }),
+			}),
 			getWorkflowStaticData: () => ({
 				webhookId: HOOK_ID,
 				webhookSecret: options.secret ?? SECRET,
@@ -227,7 +234,7 @@ describe('webhook delivery', () => {
 	it('runs the workflow for a correctly signed event, flattened', async () => {
 		const { context } = webhookContext({
 			rawBody: Buffer.from(raw),
-			signature: signBody(SECRET, raw),
+			signature: signBody(SECRET, nowSec(), raw),
 		});
 		await expect(trigger.webhook.call(context)).resolves.toEqual({
 			workflowData: [
@@ -246,18 +253,61 @@ describe('webhook delivery', () => {
 	});
 
 	it('answers 401 and runs nothing for a bad, missing or foreign signature', async () => {
-		for (const signature of [signBody('whsec_other', raw), undefined, 'not-hex']) {
+		for (const signature of [signBody('whsec_other', nowSec(), raw), undefined, 'not-hex']) {
 			const { context, response } = webhookContext({ rawBody: Buffer.from(raw), signature });
 			await expect(trigger.webhook.call(context)).resolves.toEqual({ noWebhookResponse: true });
 			expect(response.statusCode).toBe(401);
 		}
 	});
 
+	it('answers 401 for a delivery older than 5 minutes (a replay), even with a valid signature over its timestamp', async () => {
+		const stale = nowSec() - 301;
+		const { context, response } = webhookContext({
+			rawBody: Buffer.from(raw),
+			signature: signBody(SECRET, stale, raw),
+			timestamp: stale,
+		});
+		await expect(trigger.webhook.call(context)).resolves.toEqual({ noWebhookResponse: true });
+		expect(response.statusCode).toBe(401);
+	});
+
+	it('runs a delivery signed a little earlier, within the 5-minute tolerance', async () => {
+		const earlier = nowSec() - 240;
+		const { context } = webhookContext({
+			rawBody: Buffer.from(raw),
+			signature: signBody(SECRET, earlier, raw),
+			timestamp: earlier,
+		});
+		await expect(trigger.webhook.call(context)).resolves.toHaveProperty('workflowData');
+	});
+
+	it('answers 401 when the timestamp was changed after signing, or is missing', async () => {
+		const signedAt = nowSec() - 60;
+		const changed = webhookContext({
+			rawBody: Buffer.from(raw),
+			signature: signBody(SECRET, signedAt, raw),
+			timestamp: nowSec(),
+		});
+		await expect(trigger.webhook.call(changed.context)).resolves.toEqual({
+			noWebhookResponse: true,
+		});
+		expect(changed.response.statusCode).toBe(401);
+		const missing = webhookContext({
+			rawBody: Buffer.from(raw),
+			signature: signBody(SECRET, nowSec(), raw),
+			timestamp: null,
+		});
+		await expect(trigger.webhook.call(missing.context)).resolves.toEqual({
+			noWebhookResponse: true,
+		});
+		expect(missing.response.statusCode).toBe(401);
+	});
+
 	it('rejects a body altered after signing', async () => {
 		const tampered = raw.replace('evt_42', 'evt_43');
 		const { context, response } = webhookContext({
 			rawBody: Buffer.from(tampered),
-			signature: signBody(SECRET, raw),
+			signature: signBody(SECRET, nowSec(), raw),
 		});
 		await expect(trigger.webhook.call(context)).resolves.toEqual({ noWebhookResponse: true });
 		expect(response.statusCode).toBe(401);
@@ -268,7 +318,7 @@ describe('webhook delivery', () => {
 		const readRawBody = jest.fn(async () => {
 			request.rawBody = Buffer.from(raw);
 		});
-		const built = webhookContext({ signature: signBody(SECRET, raw), readRawBody });
+		const built = webhookContext({ signature: signBody(SECRET, nowSec(), raw), readRawBody });
 		request = built.request;
 		const result = await trigger.webhook.call(built.context);
 		expect(readRawBody).toHaveBeenCalled();
@@ -276,7 +326,7 @@ describe('webhook delivery', () => {
 	});
 
 	it('falls back to the re-serialised JSON body when no raw body is available', async () => {
-		const { context } = webhookContext({ signature: signBody(SECRET, raw) });
+		const { context } = webhookContext({ signature: signBody(SECRET, nowSec(), raw) });
 		await expect(trigger.webhook.call(context)).resolves.toHaveProperty('workflowData');
 	});
 
@@ -286,14 +336,14 @@ describe('webhook delivery', () => {
 		const { context } = webhookContext({
 			body: ping,
 			rawBody: Buffer.from(pingRaw),
-			signature: signBody(SECRET, pingRaw),
+			signature: signBody(SECRET, nowSec(), pingRaw),
 		});
 		await expect(trigger.webhook.call(context)).resolves.toEqual({
 			webhookResponse: { received: true },
 		});
 		const other = webhookContext({
 			rawBody: Buffer.from(raw),
-			signature: signBody(SECRET, raw),
+			signature: signBody(SECRET, nowSec(), raw),
 			events: ['job.created'],
 		});
 		await expect(trigger.webhook.call(other.context)).resolves.toEqual({
@@ -304,7 +354,7 @@ describe('webhook delivery', () => {
 	it('refuses deliveries when no secret is stored', async () => {
 		const { context, response } = webhookContext({
 			rawBody: Buffer.from(raw),
-			signature: signBody(SECRET, raw),
+			signature: signBody(SECRET, nowSec(), raw),
 			secret: '',
 		});
 		await expect(trigger.webhook.call(context)).resolves.toEqual({ noWebhookResponse: true });
